@@ -1,4 +1,4 @@
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 
 // this file will contain data transfer objects
 
@@ -9,13 +9,22 @@ pub struct LoginCredentials {
 }
 
 #[derive(Debug, Deserialize)]
-pub struct NewMessage {
+pub struct MessageFromSomeone {
     pub salt: String,
     pub content: String,
-    pub toWhom: String,
+    pub receiver: String,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, Serialize)]
 pub struct Subject {
     pub subject: String,
 }
+
+#[derive(Debug, Deserialize, Serialize)]
+pub struct MessageToSomeone {
+    pub salt: String,
+    pub content: String,
+    pub sender: String,
+}
+
+pub const MESSAGE_SUBJECT: &'static str = "message";

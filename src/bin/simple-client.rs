@@ -26,7 +26,7 @@ async fn main() {
 
     // receivers and senders of commands
     let (state_change_sender, state_change_receiver) = unbounded::<StateChange>();
-    // listening to console input
+    // listening to console input and websocket messages can be done in parallel
     rt.spawn(read_lines(state_change_sender.clone()));
     rt.spawn(read_ws_messages(state_change_sender.clone(), ws_receiver));
 
@@ -70,7 +70,10 @@ async fn main() {
                                 receiver_name: message,
                             };
                         } else {
-                            print!("{}", "Please enter a valid username (only alphanumeric characters): ");
+                            print!(
+                                "{}",
+                                "Please enter a valid username (only alphanumeric characters): "
+                            );
                             std::io::stdout().flush().unwrap();
                         }
                     }
@@ -79,18 +82,18 @@ async fn main() {
                             salt: current_time_millis_as_string(),
                             content: message,
                             subject: "new-message".to_string(),
-                            toWhom: receiver_name.to_string(),
+                            receiver: receiver_name.to_string(),
                         };
                         let new_message_in_json_format = serde_json::to_string(&new_message);
                         let _ = ws_sender
                             .send(Message::Text(new_message_in_json_format.unwrap()))
                             .await
                             .unwrap();
-                        println!(
-                            "The message has been sent to the server: {:?} ",
-                            new_message
+                        println!("The message has been sent.");
+                        print!(
+                            "{}",
+                            "Please enter the login of a user to whom you want to send a message: "
                         );
-                        print!("{}", "Please enter the login of a user to whom you want to send a message: ");
                         std::io::stdout().flush().unwrap();
                         app_state = AppState::WaitingForReceiverName;
                     }
@@ -134,7 +137,7 @@ pub struct NewMessage {
     salt: String,
     content: String,
     subject: String,
-    toWhom: String,
+    receiver: String,
 }
 
 fn is_valid_username(username: &str) -> bool {

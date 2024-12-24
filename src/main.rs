@@ -1,17 +1,20 @@
 mod dto;
 mod user_service;
 
-use dto::{LoginCredentials, NewMessage, Subject};
+use dto::{LoginCredentials, MessageFromSomeone, Subject};
 use futures::stream::SplitSink;
 use futures::{SinkExt, StreamExt};
 use log::error;
 use std::collections::HashMap;
 use std::env;
 use std::net::SocketAddr;
+use chrono::Utc;
 use tokio::net::{TcpListener, TcpStream};
 use tokio_tungstenite::{accept_async, tungstenite::protocol::Message, WebSocketStream};
 
 use crossbeam_channel::unbounded;
+use crate::dto::{MessageToSomeone, MESSAGE_SUBJECT};
+use serde_json::{Value, json};
 
 #[tokio::main]
 async fn main() {
@@ -72,14 +75,32 @@ async fn handle_connection_commands(
                     }
                 }
             }
-            ConnectionCommand::SendMessageToAnotherUser { username, message } => {
+            ConnectionCommand::SendMessageToAnotherUser { username, content } => {
                 println!(
                     "SendMessageToAnotherUser, username={}, message={}",
-                    username, message
+                    username, content
                 );
                 match user_to_connection_senders.get(&username) {
                     Some(senders) => {
-                        let message_obj = Message::Text(message);
+                        // cook 2 json objects
+                        let message_subject = Subject {
+                            subject: MESSAGE_SUBJECT.to_string()
+                        };
+                        let message_to_someone = MessageToSomeone {
+                            content,
+                            sender: username,
+                            salt:current_time_millis_as_string()
+                        };
+                        let message_json = serde_json::to_value(&message_to_someone).unwrap();
+                        let message_subject_json = serde_json::to_value(&message_subject).unwrap();
+                        // jsons are cooked
+                        // Merge the JSON objects
+                        let mut merged_json = message_json.as_object().unwrap().clone();
+                        merged_json.extend(message_subject_json.as_object().unwrap().clone());
+                        // Convert the merged map back to a JSON value
+                        let final_json = Value::Object(merged_json);
+                        let message_obj = Message::Text(final_json.to_string());
+                        //TODO wrap in a
                         for sender in senders {
                             let _ = sender.send(message_obj.clone());
                         }
@@ -87,14 +108,17 @@ async fn handle_connection_commands(
                     None => {
                         println!(
                             "cannot send a message {} to user {} because he is not connected",
-                            message, username
+                            content, username
                         );
                     }
                 }
             }
         }
         // print hashmap
-        println!("user_to_connection_senders: {:?}", user_to_connection_senders);
+        println!(
+            "user_to_connection_senders: {:?}",
+            user_to_connection_senders
+        );
     }
 }
 
@@ -109,7 +133,8 @@ enum ConnectionCommand {
     },
     SendMessageToAnotherUser {
         username: String,
-        message: String,
+        ///message content
+        content: String,
     },
 }
 
@@ -150,10 +175,11 @@ async fn handle_connection(
         |username: String, messages_sender: crossbeam_channel::Sender<Message>| {
             if !username.is_empty() {
                 // send a command to unsubscribe
-                let _ = connection_command_sender.send(ConnectionCommand::UnassignConnectionFromUser {
-                    username,
-                    messages_sender,
-                });
+                let _ =
+                    connection_command_sender.send(ConnectionCommand::UnassignConnectionFromUser {
+                        username,
+                        messages_sender,
+                    });
             }
         };
 
@@ -199,12 +225,12 @@ async fn handle_connection(
                             ));
                         } else {
                             // parse the message
-                            let new_message: NewMessage = serde_json::from_str(&content)
+                            let new_message: MessageFromSomeone = serde_json::from_str(&content)
                                 .expect("JSON was not well-formatted");
                             let _ = connection_command_sender.send(
                                 ConnectionCommand::SendMessageToAnotherUser {
-                                    username: new_message.toWhom,
-                                    message: new_message.content,
+                                    username: new_message.receiver,
+                                    content: new_message.content,
                                 },
                             );
                         }
@@ -232,4 +258,13 @@ async fn handle_connection(
         }
         println!("end of function handle_connection");
     }
+}
+
+fn current_time_millis_as_string() -> String {
+    // Get the current time in UTC
+    let now = Utc::now();
+    // Convert to milliseconds since the UNIX epoch
+    let millis = now.timestamp_millis();
+    // Convert the milliseconds to a string
+    millis.to_string()
 }
