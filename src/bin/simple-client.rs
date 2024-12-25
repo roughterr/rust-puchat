@@ -1,5 +1,5 @@
 use rust_pr::dto::LoginCredentials;
-use rust_pr::dto;
+use rust_pr::{dto, util};
 
 use crossbeam_channel::{unbounded, Sender};
 use futures::stream::SplitStream;
@@ -49,7 +49,7 @@ async fn main() {
                             login: username.to_string(),
                             password: message
                         };
-                        let authorization_message = dto::prepare_json(Box::new(login_credentials), dto::AUTHENTICATE_SUBJECT.to_string());
+                        let authorization_message = dto::attach_subject_and_serialize(Box::new(login_credentials), dto::AUTHENTICATE_SUBJECT.to_string());
                         let _ = ws_sender
                             .send(Message::Text(authorization_message))
                             .await
@@ -78,11 +78,11 @@ async fn main() {
                     }
                     AppState::WaitingForText { receiver_name } => {
                         let new_message = dto::MessageFromSomeone {
-                            salt: dto::current_time_millis_as_string(),
+                            salt: util::current_time_millis_as_string(),
                             content: message,
                             receiver: receiver_name.to_string(),
                         };
-                        let new_message_str = dto::prepare_json(Box::new(new_message), dto::NEW_MESSAGE_SUBJECT.to_string());
+                        let new_message_str = dto::attach_subject_and_serialize(Box::new(new_message), dto::NEW_MESSAGE_SUBJECT.to_string());
                         let _ = ws_sender
                             .send(Message::Text(new_message_str))
                             .await

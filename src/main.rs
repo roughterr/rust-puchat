@@ -1,5 +1,6 @@
 mod dto;
 mod user_service;
+mod util;
 
 use dto::{LoginCredentials, MessageFromSomeone, Subject, MessageToSomeone, MESSAGE_SUBJECT};
 use futures::stream::SplitSink;
