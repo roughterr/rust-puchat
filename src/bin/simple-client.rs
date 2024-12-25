@@ -125,7 +125,7 @@ async fn main() {
 
 fn is_valid_username(username: &str) -> bool {
     // Check if the string is not empty and contains only alphanumeric characters
-    !username.is_empty() && username.chars().all(|c| c.is_alphanumeric())
+    !username.is_empty() && username.chars().all(|c| c.is_alphanumeric() || c == '-' || c == '_' || c == '.')
 }
 
 enum AppState {
@@ -149,7 +149,6 @@ async fn read_ws_messages(
     while let Some(msg) = ws_receiver.next().await {
         match msg {
             Ok(Message::Text(content)) => {
-                println!("Incoming message {:?}", &content);
                 let _ =
                     state_change_sender.send(StateChange::NewWebSocketMessage { message: content });
             }
@@ -159,7 +158,7 @@ async fn read_ws_messages(
             }
             Ok(_) => print!("OK_"),
             Err(e) => {
-                println!("WebSockt error: {}", e);
+                println!("WebSocket error: {}", e);
                 break;
             }
         }
