@@ -82,27 +82,9 @@ async fn handle_connection_commands(
                 );
                 match user_to_connection_senders.get(&username) {
                     Some(senders) => {
-                        // cook 2 json objects
-                        let message_subject = Subject {
-                            subject: MESSAGE_SUBJECT.to_string()
-                        };
-                        let message_to_someone = MessageToSomeone {
-                            content,
-                            sender: username,
-                            salt:current_time_millis_as_string()
-                        };
-                        let message_json = serde_json::to_value(&message_to_someone).unwrap();
-                        let message_subject_json = serde_json::to_value(&message_subject).unwrap();
-                        // jsons are cooked
-                        // Merge the JSON objects
-                        let mut merged_json = message_json.as_object().unwrap().clone();
-                        merged_json.extend(message_subject_json.as_object().unwrap().clone());
-                        // Convert the merged map back to a JSON value
-                        let final_json = Value::Object(merged_json);
-                        let message_obj = Message::Text(final_json.to_string());
-                        //TODO wrap in a
+                        let message_obj = dto::prepare_message_for_from_server_to_client(username, content);
                         for sender in senders {
-                            let _ = sender.send(message_obj.clone());
+                            let _ = sender.send(Message::Text(message_obj.clone()));
                         }
                     }
                     None => {
@@ -115,10 +97,10 @@ async fn handle_connection_commands(
             }
         }
         // print hashmap
-        println!(
-            "user_to_connection_senders: {:?}",
-            user_to_connection_senders
-        );
+        for (key, value) in &user_to_connection_senders {
+            print!("User {} has {} opened connections. ", key, value.len());
+        }
+        println!();
     }
 }
 
@@ -138,9 +120,7 @@ enum ConnectionCommand {
     },
 }
 
-/*
-* Sends a stream of messages to a WebSocket connection.
-*/
+/// Sends a stream of messages to a WebSocket connection.
 async fn send_ws_messages_from_stream(
     mut ws_sender: SplitSink<WebSocketStream<TcpStream>, Message>,
     messages_receiver: crossbeam_channel::Receiver<Message>,
@@ -260,11 +240,3 @@ async fn handle_connection(
     }
 }
 
-fn current_time_millis_as_string() -> String {
-    // Get the current time in UTC
-    let now = Utc::now();
-    // Convert to milliseconds since the UNIX epoch
-    let millis = now.timestamp_millis();
-    // Convert the milliseconds to a string
-    millis.to_string()
-}

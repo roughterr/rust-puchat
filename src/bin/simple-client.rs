@@ -1,8 +1,10 @@
+use rust_pr::dto::LoginCredentials;
+use rust_pr::dto;
+
 use chrono::Utc;
 use crossbeam_channel::{unbounded, Sender};
 use futures::stream::SplitStream;
 use futures::{SinkExt, StreamExt};
-use serde::{Deserialize, Serialize};
 use std::io::{self, BufRead, Write};
 use tokio::net::TcpStream;
 use tokio_tungstenite::{connect_async, MaybeTlsStream, WebSocketStream};
@@ -46,13 +48,11 @@ async fn main() {
                     AppState::WaitingForPassword { username } => {
                         let login_credentials = LoginCredentials {
                             login: username.to_string(),
-                            password: message,
-                            subject: "authenticate".to_string(),
+                            password: message
                         };
-                        let authorization_in_json_format =
-                            serde_json::to_string(&login_credentials);
+                        let authorization_message = dto::prepare_json(Box::new(login_credentials), dto::AUTHENTICATE_SUBJECT.to_string());
                         let _ = ws_sender
-                            .send(Message::Text(authorization_in_json_format.unwrap()))
+                            .send(Message::Text(authorization_message))
                             .await
                             .unwrap();
                         println!("Authorization request sent.");
@@ -78,15 +78,14 @@ async fn main() {
                         }
                     }
                     AppState::WaitingForText { receiver_name } => {
-                        let new_message = NewMessage {
-                            salt: current_time_millis_as_string(),
+                        let new_message = dto::MessageFromSomeone {
+                            salt: dto::current_time_millis_as_string(),
                             content: message,
-                            subject: "new-message".to_string(),
                             receiver: receiver_name.to_string(),
                         };
-                        let new_message_in_json_format = serde_json::to_string(&new_message);
+                        let new_message_str = dto::prepare_json(Box::new(new_message), dto::NEW_MESSAGE_SUBJECT.to_string());
                         let _ = ws_sender
-                            .send(Message::Text(new_message_in_json_format.unwrap()))
+                            .send(Message::Text(new_message_str))
                             .await
                             .unwrap();
                         println!("The message has been sent.");
@@ -125,21 +124,6 @@ async fn main() {
     }
 }
 
-#[derive(Debug, Deserialize, Serialize)]
-pub struct LoginCredentials {
-    pub login: String,
-    pub password: String,
-    pub subject: String,
-}
-
-#[derive(Debug, Deserialize, Serialize)]
-pub struct NewMessage {
-    salt: String,
-    content: String,
-    subject: String,
-    receiver: String,
-}
-
 fn is_valid_username(username: &str) -> bool {
     // Check if the string is not empty and contains only alphanumeric characters
     !username.is_empty() && username.chars().all(|c| c.is_alphanumeric())
@@ -151,15 +135,6 @@ enum AppState {
     WaitingForServerAuthorizationResponse,
     WaitingForReceiverName,
     WaitingForText { receiver_name: String },
-}
-
-fn current_time_millis_as_string() -> String {
-    // Get the current time in UTC
-    let now = Utc::now();
-    // Convert to milliseconds since the UNIX epoch
-    let millis = now.timestamp_millis();
-    // Convert the milliseconds to a string
-    millis.to_string()
 }
 
 enum StateChange {
@@ -194,11 +169,6 @@ async fn read_ws_messages(
 
 async fn read_lines(state_change_sender: Sender<StateChange>) {
     let stdin = io::stdin();
-
-    // let message_before_login = "Please enter user name. For example, dan or ian: ";
-    // print!("{}", message_before_login);
-    // std::io::stdout().flush().unwrap();
-
     for line in stdin.lock().lines() {
         let _ = state_change_sender.send(StateChange::NewReadlineMessage {
             message: line.unwrap(),
