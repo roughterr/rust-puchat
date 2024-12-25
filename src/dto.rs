@@ -33,7 +33,6 @@ pub struct Subject {
 pub const MESSAGE_SUBJECT: &'static str = "message";
 pub const AUTHENTICATE_SUBJECT: &'static str = "authenticate";
 pub const NEW_MESSAGE_SUBJECT: &'static str = "new-message";
-pub const SUBJECT_FIELD_NAME: &'static str = "subject";
 
 /// Accepts 2 objects: a struct with the main data for the request and a string with the message subject.
 pub fn prepare_json(json_main_data: Box<dyn erased::Serialize>, subject: String) -> String {

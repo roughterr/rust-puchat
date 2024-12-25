@@ -1,7 +1,7 @@
 mod dto;
 mod user_service;
 
-use dto::{LoginCredentials, MessageFromSomeone, Subject};
+use dto::{LoginCredentials, MessageFromSomeone, Subject, MessageToSomeone, MESSAGE_SUBJECT};
 use futures::stream::SplitSink;
 use futures::{SinkExt, StreamExt};
 use log::error;
@@ -13,7 +13,6 @@ use tokio::net::{TcpListener, TcpStream};
 use tokio_tungstenite::{accept_async, tungstenite::protocol::Message, WebSocketStream};
 
 use crossbeam_channel::unbounded;
-use crate::dto::{MessageToSomeone, MESSAGE_SUBJECT};
 use serde_json::{Value, json};
 
 #[tokio::main]
@@ -172,7 +171,7 @@ async fn handle_connection(
                     serde_json::from_str(&content).expect("JSON was not well-formatted");
                 println!("subject: {:#?}", &subject.subject);
                 match subject.subject.as_str() {
-                    "authenticate" => {
+                    dto::AUTHENTICATE_SUBJECT => {
                         let login_credentials: LoginCredentials =
                             serde_json::from_str(&content).expect("JSON was not well-formatted");
                         let is_password_correct = user_service::are_credentials_correct(
@@ -196,7 +195,7 @@ async fn handle_connection(
                             ));
                         }
                     }
-                    "new-message" => {
+                    dto::NEW_MESSAGE_SUBJECT => {
                         println!("sending message to another user");
                         if current_username.is_empty() {
                             let _ = messages_sender.send(Message::Text(

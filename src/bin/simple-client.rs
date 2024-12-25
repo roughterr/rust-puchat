@@ -1,7 +1,6 @@
 use rust_pr::dto::LoginCredentials;
 use rust_pr::dto;
 
-use chrono::Utc;
 use crossbeam_channel::{unbounded, Sender};
 use futures::stream::SplitStream;
 use futures::{SinkExt, StreamExt};
@@ -34,7 +33,7 @@ async fn main() {
 
     let mut app_state = AppState::WaitingForUsername;
     print!("{}", "Please enter your login: ");
-    std::io::stdout().flush().unwrap();
+    io::stdout().flush().unwrap();
 
     for state_change in state_change_receiver {
         match state_change {
@@ -42,7 +41,7 @@ async fn main() {
                 match app_state {
                     AppState::WaitingForUsername => {
                         print!("{}", "Please enter your password: ");
-                        std::io::stdout().flush().unwrap();
+                        io::stdout().flush().unwrap();
                         app_state = AppState::WaitingForPassword { username: message };
                     }
                     AppState::WaitingForPassword { username } => {
