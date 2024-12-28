@@ -15,6 +15,7 @@ use tokio_tungstenite::{accept_async, tungstenite::protocol::Message, WebSocketS
 
 use crossbeam_channel::unbounded;
 use serde_json::{Value, json};
+use crate::connection_handler::ConnectionCommand;
 
 #[tokio::main]
 async fn main() {
@@ -60,10 +61,9 @@ async fn handle_connection_commands(
                 println!("AssignConnectionToUser, username={}", &username);
                 match user_to_connection_senders.get_mut(&username) {
                     Some(senders) => {
-                        println!("senders.len()={}", &senders.len());
                         if senders.len() as i32 >= connection_handler::MAXIMUM_SESSIONS_PER_USER {
                             let _ = messages_sender.send(Message::Text("Exceeded the limit of WebSocket connections".to_string()));
-                            //TODO terminate the connection
+                            let _ = messages_sender.send(Message::Close(None));
                         } else {
                             senders.push(messages_sender);
                         }
@@ -113,22 +113,6 @@ async fn handle_connection_commands(
         }
         println!();
     }
-}
-
-enum ConnectionCommand {
-    AssignConnectionToUser {
-        username: String,
-        messages_sender: crossbeam_channel::Sender<Message>,
-    },
-    UnassignConnectionFromUser {
-        username: String,
-        messages_sender: crossbeam_channel::Sender<Message>,
-    },
-    SendMessageToAnotherUser {
-        username: String,
-        ///message content
-        content: String,
-    },
 }
 
 /// Sends a stream of messages to a WebSocket connection.
