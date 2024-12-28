@@ -1,6 +1,7 @@
 mod dto;
 mod user_service;
 mod util;
+mod connection_handler;
 
 use dto::{LoginCredentials, MessageFromSomeone, Subject, MessageToSomeone, MESSAGE_SUBJECT};
 use futures::stream::SplitSink;
@@ -9,7 +10,6 @@ use log::error;
 use std::collections::HashMap;
 use std::env;
 use std::net::SocketAddr;
-use chrono::Utc;
 use tokio::net::{TcpListener, TcpStream};
 use tokio_tungstenite::{accept_async, tungstenite::protocol::Message, WebSocketStream};
 
@@ -57,11 +57,22 @@ async fn handle_connection_commands(
                 username,
                 messages_sender,
             } => {
-                println!("AssignConnectionToUser, username={}", username);
-                user_to_connection_senders
-                    .entry(username)
-                    .and_modify(|vec| vec.push(messages_sender.clone()))
-                    .or_insert_with(|| vec![messages_sender]);
+                println!("AssignConnectionToUser, username={}", &username);
+                match user_to_connection_senders.get_mut(&username) {
+                    Some(senders) => {
+                        println!("senders.len()={}", &senders.len());
+                        if senders.len() as i32 >= connection_handler::MAXIMUM_SESSIONS_PER_USER {
+                            let _ = messages_sender.send(Message::Text("Exceeded the limit of WebSocket connections".to_string()));
+                            //TODO terminate the connection
+                        } else {
+                            senders.push(messages_sender);
+                        }
+                    }
+                    None => {
+                        // we assume that having 1 connection is always OK
+                        user_to_connection_senders.insert(username, vec![messages_sender]);
+                    }
+                }
             }
             ConnectionCommand::UnassignConnectionFromUser {
                 username,
