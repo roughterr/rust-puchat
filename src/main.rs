@@ -2,6 +2,7 @@ mod dto;
 mod user_service;
 mod util;
 mod connection_handler;
+mod user_context;
 
 use dto::{LoginCredentials, MessageFromSomeone, Subject, MessageToSomeone, MESSAGE_SUBJECT};
 use futures::stream::SplitSink;
