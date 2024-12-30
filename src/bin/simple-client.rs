@@ -153,7 +153,7 @@ async fn read_ws_messages(
                     state_change_sender.send(StateChange::NewWebSocketMessage { message: content });
             }
             Ok(Message::Close(_)) => {
-                println!("The client wants to gracefully close the session");
+                println!("The server wants to gracefully close the session");
                 break;
             }
             Ok(_) => print!("OK_"),

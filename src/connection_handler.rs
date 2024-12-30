@@ -1,5 +1,5 @@
-use crate::user_context::user_context;
 use crate::dto;
+use crate::user_context::{AddSessionResult, ConversationPartners};
 use std::collections::HashMap;
 use tungstenite::Message;
 
@@ -26,7 +26,8 @@ pub enum ConnectionCommand {
 pub async fn handle_connection_commands(
     connection_command_receiver: crossbeam_channel::Receiver<ConnectionCommand>,
 ) {
-    let mut users_context: HashMap<String, user_context> = HashMap::new();
+    // let mut users_context: HashMap<String, UserContext> = HashMap::new();
+    let mut conversation_partners: ConversationPartners = ConversationPartners::new();
 
     // a lot should be added here
     for received in connection_command_receiver {
@@ -36,21 +37,15 @@ pub async fn handle_connection_commands(
                 messages_sender,
             } => {
                 println!("AssignConnectionToUser, username={}", &username);
-                match users_context.get_mut(&username) {
-                    Some(user_context) => {
-                        let mut senders = &mut user_context.opened_sessions_senders;
-                        if senders.len() as i32 >= MAXIMUM_SESSIONS_PER_USER {
-                            let _ = messages_sender.send(Message::Text("Exceeded the limit of WebSocket connections".to_string()));
-                            let _ = messages_sender.send(Message::Close(None));
-                        } else {
-                            senders.push(messages_sender);
-                        }
-                    }
-                    None => {
-                        let mut user_context = user_context::new();
-                        // we assume that having 1 connection is always OK
-                        user_context.opened_sessions_senders.push(messages_sender);
-                        users_context.insert(username, user_context);
+                match conversation_partners.add_session_sender_if_not_exceeded(
+                    &username,
+                    messages_sender,
+                    MAXIMUM_SESSIONS_PER_USER,
+                ) {
+                    AddSessionResult::Success => {}
+                    AddSessionResult::TooManySessions { messages_sender } => {
+                        let _ = messages_sender.send(Message::Text("Exceeded the limit of WebSocket connections".to_string()));
+                        let _ = messages_sender.send(Message::Close(None));
                     }
                 }
             }
@@ -59,18 +54,17 @@ pub async fn handle_connection_commands(
                 messages_sender,
             } => {
                 println!("UnassignConnectionFromUser, username={}", username);
-                if let Some(user_context) = users_context.get_mut(&username) {
-                    user_context.opened_sessions_senders.retain(|s| !s.same_channel(&messages_sender));
-                }
+                conversation_partners.remove_session_sender(&username, &messages_sender);
             }
             ConnectionCommand::SendMessageToAnotherUser { username, content } => {
                 println!(
                     "SendMessageToAnotherUser, username={}, message={}",
                     username, content
                 );
-                match users_context.get(&username) {
+                match conversation_partners.conversation_partners.get(&username) {
                     Some(user_context) => {
-                        let message_obj = dto::prepare_message_for_from_server_to_client(username, content);
+                        let message_obj =
+                            dto::prepare_message_for_from_server_to_client(username, content);
                         for sender in user_context.opened_sessions_senders.iter() {
                             let _ = sender.send(Message::Text(message_obj.clone()));
                         }
@@ -85,8 +79,12 @@ pub async fn handle_connection_commands(
             }
         }
         // print hashmap
-        for (key, value) in &users_context {
-            print!("User {} has {} opened connections. ", key, value.opened_sessions_senders.len());
+        for (key, value) in &conversation_partners.conversation_partners {
+            print!(
+                "User {} has {} opened connections. ",
+                key,
+                value.opened_sessions_senders.len()
+            );
         }
         println!();
     }
