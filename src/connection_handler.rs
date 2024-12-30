@@ -1,7 +1,7 @@
+use crate::user_context::user_context;
+use crate::dto;
 use std::collections::HashMap;
 use tungstenite::Message;
-use crate::{connection_handler, dto};
-use crate::user_context::user_context;
 
 /// Define the maximum allowed number of WebSocket connections per user.
 pub const MAXIMUM_SESSIONS_PER_USER: i32 = 2;
@@ -39,7 +39,7 @@ pub async fn handle_connection_commands(
                 match users_context.get_mut(&username) {
                     Some(user_context) => {
                         let mut senders = &mut user_context.opened_sessions_senders;
-                        if senders.len() as i32 >= connection_handler::MAXIMUM_SESSIONS_PER_USER {
+                        if senders.len() as i32 >= MAXIMUM_SESSIONS_PER_USER {
                             let _ = messages_sender.send(Message::Text("Exceeded the limit of WebSocket connections".to_string()));
                             let _ = messages_sender.send(Message::Close(None));
                         } else {
