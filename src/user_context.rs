@@ -1,5 +1,6 @@
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
+use chrono::{DateTime, Utc};
 use tungstenite::Message;
 use crate::user_context::AddSessionResult::{Success, TooManySessions};
 
@@ -12,7 +13,7 @@ struct PrivateMessage {
     /// the content of the message.
     content: String,
     /// the time (in milliseconds) when the server received the message.
-    server_time: i64,
+    server_time: DateTime<Utc>,
 }
 
 struct PrivateConversation {
@@ -21,13 +22,13 @@ struct PrivateConversation {
     /// It will be empty if the user is not the owner of the conversation.
     messages: Vec<PrivateMessage>,
     /// how many times this conversation has been shown to the user
-    shown_times: u32,
-    /// HashMap where the key is the showcase number.
-    /// And the value is the number of messages that followed the showcase.
+    show_count: u32,
+    /// HashMap where the key is the number of times when the user retrieved the conversation.
+    /// And the value is the number of messages that were sent as follower messages to this show count.
     /// It is done to prevent a situation when the user sends a few consecutive messages but the fist
     /// message is lost. We do not want the user to see the second or any other consecutive messages
     /// until the previous are delivered.
-    showcase_to_following_messages_count: HashMap<u32, u16>,
+    show_count_to_following_messages_count: HashMap<u32, u16>,
 }
 
 /// The data of one user.
