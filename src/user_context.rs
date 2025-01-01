@@ -6,19 +6,32 @@ use crate::user_context::AddSessionResult::{Success, TooManySessions};
 
 /// Represents a private chat message in the server internal memory.
 struct PrivateMessage {
-    /// message id. Message 0 is the chat itself!
-    id: u32,
     /// whether the conversation owner is the author of the message.
     is_owner_author: bool,
     /// the content of the message.
     content: String,
     /// the time (in milliseconds) when the server received the message.
     server_time: DateTime<Utc>,
+    /// True for deleted messages.
+    is_deleted: bool,
+}
+
+impl PrivateMessage {
+    pub fn new(is_owner_author: bool, content: String) -> Self {
+        PrivateMessage {
+            is_owner_author,
+            content,
+            server_time: Utc::now(),
+            is_deleted: false,
+        }
+    }
 }
 
 struct PrivateConversation {
+    /// Defines from which index the array "messages" start. The default value must be 0.
+    id_offset: u32,
     /// if the user is the owner of the conversation
-    owner: bool,
+    is_owner_author: bool,
     /// It will be empty if the user is not the owner of the conversation.
     messages: Vec<PrivateMessage>,
     /// how many times this conversation has been shown to the user
@@ -29,6 +42,18 @@ struct PrivateConversation {
     /// message is lost. We do not want the user to see the second or any other consecutive messages
     /// until the previous are delivered.
     show_count_to_following_messages_count: HashMap<u32, u16>,
+}
+
+impl PrivateConversation {
+    pub fn new() -> Self {
+        PrivateConversation {
+            id_offset: 0,
+            is_owner_author: false,
+            messages: vec![],
+            show_count: 0,
+            show_count_to_following_messages_count: Default::default(),
+        }
+    }
 }
 
 /// The data of one user.
