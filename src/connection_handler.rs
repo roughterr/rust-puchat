@@ -1,6 +1,5 @@
 use crate::dto;
-use crate::user_context::{AddSessionResult, ConversationPartners};
-use std::collections::HashMap;
+use crate::user_context::{AddSessionResult, ApplicationScope};
 use tungstenite::Message;
 
 /// Define the maximum allowed number of WebSocket connections per user.
@@ -26,8 +25,7 @@ pub enum ConnectionCommand {
 pub async fn handle_connection_commands(
     connection_command_receiver: crossbeam_channel::Receiver<ConnectionCommand>,
 ) {
-    // let mut users_context: HashMap<String, UserContext> = HashMap::new();
-    let mut conversation_partners: ConversationPartners = ConversationPartners::new();
+    let mut conversation_partners: ApplicationScope = ApplicationScope::new();
 
     // a lot should be added here
     for received in connection_command_receiver {
