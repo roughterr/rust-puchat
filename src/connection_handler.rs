@@ -59,7 +59,7 @@ pub async fn handle_connection_commands(
                     "SendMessageToAnotherUser, username={}, message={}",
                     username, content
                 );
-                match conversation_partners.conversation_partners.get(&username) {
+                match conversation_partners.chat_users.get(&username) {
                     Some(user_context) => {
                         let message_obj =
                             dto::prepare_message_for_from_server_to_client(username, content);
@@ -77,7 +77,7 @@ pub async fn handle_connection_commands(
             }
         }
         // print hashmap
-        for (key, value) in &conversation_partners.conversation_partners {
+        for (key, value) in &conversation_partners.chat_users {
             print!(
                 "User {} has {} opened connections. ",
                 key,

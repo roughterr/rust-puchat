@@ -1,5 +1,8 @@
 use crate::user_context::AddSessionResult::{Success, TooManySessions};
 use chrono::{DateTime, Utc};
+use crate::private_conversation_partners::{
+    compare_usernames, PrivateConversationPartnersHashmapKey,
+};
 use std::collections::HashMap;
 use std::hash::Hash;
 use tungstenite::Message;
@@ -14,8 +17,8 @@ pub struct PrivateMessageServerMetadata {
 
 /// Represents a private chat message in the server internal memory.
 struct PrivateMessage {
-    /// whether the conversation owner is the author of the message.
-    is_owner_author: bool,
+    ///true - user 1 is the author. false - user 2 is the author
+    is_sender_user1: bool,
     /// the content of the message.
     content: String,
     /// the time (in milliseconds) when the server received the message.
@@ -25,9 +28,9 @@ struct PrivateMessage {
 }
 
 impl PrivateMessage {
-    pub fn new(is_owner_author: bool, content: String) -> Self {
+    pub fn new(is_sender_user1: bool, content: String) -> Self {
         PrivateMessage {
-            is_owner_author,
+            is_sender_user1,
             content,
             server_time: Utc::now(),
             is_deleted: false,
@@ -35,16 +38,27 @@ impl PrivateMessage {
     }
 }
 
-struct PrivateMessages {
+/// Contains data related to the private conversation and these data are relevant to both
+/// conversation partners.
+struct PrivateConversation {
     /// Defines from which index the array "messages" start. The default value must be 0.
     id_offset: u32,
     /// A list of messages.
     messages: Vec<PrivateMessage>,
 }
 
-struct PrivateConversation {
-    /// It will be empty if the user is not the owner of the conversation.
-    messages: Option<PrivateMessages>,
+impl PrivateConversation {
+    pub fn new(first_message: PrivateMessage) -> Self {
+        PrivateConversation {
+            id_offset: 0,
+            messages: vec![first_message],
+        }
+    }
+}
+
+/// Contains data related to the private conversation but these data are relevant only to one of the
+/// two conversation partners.
+struct PrivateConversationOnePartnerSpecificData {
     /// how many times this conversation has been shown to the user
     show_count: u32,
     /// HashMap where the key is the number of times when the user retrieved the conversation.
@@ -55,21 +69,9 @@ struct PrivateConversation {
     show_count_to_following_messages_count: HashMap<u32, u16>,
 }
 
-impl PrivateConversation {
-    pub fn new_owned_private_conversation(first_message_content: String) -> Self {
-        PrivateConversation {
-            messages: Some(PrivateMessages {
-                id_offset: 0,
-                messages: vec![PrivateMessage::new(true, first_message_content)],
-            }),
-            show_count: 0,
-            show_count_to_following_messages_count: HashMap::new(),
-        }
-    }
-
-    pub fn new_non_owned_private_conversation() -> Self {
-        PrivateConversation {
-            messages: None,
+impl PrivateConversationOnePartnerSpecificData {
+    pub fn new(first_message_content: String) -> Self {
+        PrivateConversationOnePartnerSpecificData {
             show_count: 0,
             show_count_to_following_messages_count: HashMap::new(),
         }
@@ -77,17 +79,16 @@ impl PrivateConversation {
 }
 
 /// The data of one user.
-pub struct ConversationPartner {
+pub struct ChatUser {
     /// the key is the user id of the Conversation partner.
-    pub private_conversations: HashMap<String, PrivateConversation>,
+    pub private_conversations: HashMap<String, PrivateConversationOnePartnerSpecificData>,
     // the currently opened sessions of the users.
     pub opened_sessions_senders: Vec<crossbeam_channel::Sender<Message>>,
 }
 
-impl ConversationPartner {
-    /// Constructs a new `ConversationPartner`.
+impl ChatUser {
     pub fn new() -> Self {
-        ConversationPartner {
+        ChatUser {
             private_conversations: HashMap::new(),
             opened_sessions_senders: Vec::new(),
         }
@@ -96,7 +97,8 @@ impl ConversationPartner {
 
 /// The data about all users.
 pub struct ApplicationScope {
-    pub conversation_partners: HashMap<String, ConversationPartner>,
+    pub chat_users: HashMap<String, ChatUser>,
+    pub private_conversations: HashMap<PrivateConversationPartnersHashmapKey, PrivateConversation>,
 }
 
 pub enum AddSessionResult {
@@ -109,7 +111,8 @@ pub enum AddSessionResult {
 impl ApplicationScope {
     pub fn new() -> Self {
         ApplicationScope {
-            conversation_partners: HashMap::new(),
+            chat_users: HashMap::new(),
+            private_conversations: HashMap::new(),
         }
     }
 
@@ -119,16 +122,13 @@ impl ApplicationScope {
         messages_sender: crossbeam_channel::Sender<Message>,
         maximum_sessions_allowed: i32,
     ) -> AddSessionResult {
-        match self.conversation_partners.get_mut(username) {
+        match self.chat_users.get_mut(username) {
             None => {
                 // create a new conversation partner
-                let mut conversation_partner: ConversationPartner = ConversationPartner::new();
-                conversation_partner
-                    .opened_sessions_senders
-                    .push(messages_sender);
+                let mut chat_user: ChatUser = ChatUser::new();
+                chat_user.opened_sessions_senders.push(messages_sender);
                 // register the new conversation partner
-                self.conversation_partners
-                    .insert(username.clone(), conversation_partner);
+                self.chat_users.insert(username.clone(), chat_user);
                 Success
             }
             Some(conversation_partner) => {
@@ -151,7 +151,7 @@ impl ApplicationScope {
         username: &String,
         messages_sender: &crossbeam_channel::Sender<Message>,
     ) {
-        match self.conversation_partners.get_mut(username) {
+        match self.chat_users.get_mut(username) {
             None => {}
             Some(conversation_partner) => {
                 conversation_partner
@@ -167,50 +167,35 @@ impl ApplicationScope {
         receiver: String,
         content: String,
     ) -> PrivateMessageServerMetadata {
-        let private_message = PrivateMessage::new(true, content);
-        let mut private_message_server_metadata = PrivateMessageServerMetadata {
-            id: 0,
-            server_time: private_message.server_time.clone(),
+        let is_sender_partner1: bool = compare_usernames(&sender, &receiver);
+        let new_private_message = PrivateMessage::new(is_sender_partner1.clone(), content);
+        let server_time = new_private_message.server_time.clone();
+        let (partner1, partner2) = if is_sender_partner1 {
+            (sender, receiver)
+        } else {
+            (receiver, sender)
         };
-
-        match self.conversation_partners.get_mut(&sender) {
+        let private_conversation_partners =
+            PrivateConversationPartnersHashmapKey { partner1, partner2 };
+        match self
+            .private_conversations
+            .get_mut(&private_conversation_partners)
+        {
             None => {
-                let private_conversation = PrivateConversation {
-                    messages: Some(PrivateMessages {
-                        id_offset: 0,
-                        messages: vec![private_message],
-                    }),
-                    show_count: 0,
-                    show_count_to_following_messages_count: HashMap::new(),
-                };
-                // if the conversation partner doesn't exist yet, we should create him
-                self.conversation_partners.insert(
-                    sender,
-                    ConversationPartner {
-                        private_conversations: HashMap::from([(receiver, private_conversation)]),
-                        opened_sessions_senders: vec![],
-                    },
+                self.private_conversations.insert(
+                    private_conversation_partners,
+                    PrivateConversation::new(new_private_message),
                 );
-                //TODO add the conversation to the partner (messages list should be None).
+                PrivateMessageServerMetadata { id: 0, server_time }
             }
-            Some(partner) => {
-                // when the conversation partner is found first we should find out if he is the owner of the conversation or not
-                match partner.private_conversations.get_mut(&receiver) {
-                    None => {
-                        //TODO if he is not the owner we assume that his conversation partner is the owner
-                    }
-                    Some(private_conversation) => match &mut private_conversation.messages {
-                        None => {}
-                        Some(private_messages) => {
-                            private_messages.messages.push(private_message);
-                            private_message_server_metadata.id = private_messages.id_offset
-                                + private_messages.messages.len() as u32;
-                        }
-                    },
+            Some(private_messages) => {
+                private_messages.messages.push(new_private_message);
+                PrivateMessageServerMetadata {
+                    id: private_messages.id_offset + private_messages.messages.len() as u32,
+                    server_time,
                 }
             }
         }
-        private_message_server_metadata
     }
 }
 

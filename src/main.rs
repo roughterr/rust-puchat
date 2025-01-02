@@ -3,6 +3,7 @@ mod user_service;
 mod util;
 mod connection_handler;
 mod user_context;
+mod private_conversation_partners;
 
 use dto::{LoginCredentials, MessageFromSomeone, Subject, MessageToSomeone, MESSAGE_SUBJECT};
 use futures::stream::SplitSink;
