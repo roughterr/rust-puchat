@@ -25,7 +25,7 @@ pub enum ConnectionCommand {
 pub async fn handle_connection_commands(
     connection_command_receiver: crossbeam_channel::Receiver<ConnectionCommand>,
 ) {
-    let mut conversation_partners: ApplicationScope = ApplicationScope::new();
+    let mut application_scope: ApplicationScope = ApplicationScope::new();
 
     // a lot should be added here
     for received in connection_command_receiver {
@@ -35,7 +35,7 @@ pub async fn handle_connection_commands(
                 messages_sender,
             } => {
                 println!("AssignConnectionToUser, username={}", &username);
-                match conversation_partners.add_session_sender_if_not_exceeded(
+                match application_scope.add_session_sender_if_not_exceeded(
                     &username,
                     messages_sender,
                     MAXIMUM_SESSIONS_PER_USER,
@@ -52,14 +52,14 @@ pub async fn handle_connection_commands(
                 messages_sender,
             } => {
                 println!("UnassignConnectionFromUser, username={}", username);
-                conversation_partners.remove_session_sender(&username, &messages_sender);
+                application_scope.remove_session_sender(&username, &messages_sender);
             }
             ConnectionCommand::SendMessageToAnotherUser { username, content } => {
                 println!(
                     "SendMessageToAnotherUser, username={}, message={}",
                     username, content
                 );
-                match conversation_partners.chat_users.get(&username) {
+                match application_scope.chat_users.get(&username) {
                     Some(user_context) => {
                         let message_obj =
                             dto::prepare_message_for_from_server_to_client(username, content);
@@ -77,7 +77,7 @@ pub async fn handle_connection_commands(
             }
         }
         // print hashmap
-        for (key, value) in &conversation_partners.chat_users {
+        for (key, value) in &application_scope.chat_users {
             print!(
                 "User {} has {} opened connections. ",
                 key,
