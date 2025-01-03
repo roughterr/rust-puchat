@@ -2,6 +2,7 @@ use erased_serde as erased;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::ops::Deref;
+use crate::user_context::PrivateMessageServerMetadata;
 use crate::util::current_time_millis_as_string;
 
 // this file will contain data transfer objects
@@ -14,16 +15,18 @@ pub struct LoginCredentials {
 
 #[derive(Debug, Deserialize, Serialize)]
 pub struct MessageFromSomeone {
-    pub salt: String,
+    pub after_show: u32,
+    pub index: u16,
     pub content: String,
     pub receiver: String,
 }
 
 #[derive(Debug, Deserialize, Serialize)]
 pub struct MessageToSomeone {
-    pub salt: String,
+    pub id: u32,
     pub content: String,
-    pub sender: String,
+    pub sender_username: String,
+    pub datetime: String,
 }
 
 #[derive(Debug, Deserialize, Serialize)]
@@ -50,13 +53,9 @@ pub fn attach_subject_and_serialize(json_main_data: Box<dyn erased::Serialize>, 
 }
 
 /// Generates a string that the server sends to a client to send him a message from another user
-pub fn prepare_message_for_from_server_to_client(sender: String, content: String) -> String {
+pub fn prepare_message_for_from_server_to_client(message_to_someone: MessageToSomeone) -> String {
     attach_subject_and_serialize(
-        Box::new(MessageToSomeone {
-            content,
-            sender,
-            salt: current_time_millis_as_string(),
-        }),
+        Box::new(message_to_someone),
         MESSAGE_SUBJECT.to_string(),
     )
 }

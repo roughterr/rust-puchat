@@ -1,6 +1,7 @@
 use crate::dto;
-use crate::user_context::{AddSessionResult, ApplicationScope};
+use crate::user_context::{AddSessionResult, ApplicationScope, PrivateMessageServerMetadata};
 use tungstenite::Message;
+use crate::dto::{attach_subject_and_serialize, MessageToSomeone, MESSAGE_SUBJECT};
 
 /// Define the maximum allowed number of WebSocket connections per user.
 pub const MAXIMUM_SESSIONS_PER_USER: i32 = 2;
@@ -15,7 +16,8 @@ pub enum ConnectionCommand {
         messages_sender: crossbeam_channel::Sender<Message>,
     },
     SendMessageToAnotherUser {
-        username: String,
+        sender_username: String,
+        receiver_username: String,
         ///message content
         content: String,
     },
@@ -54,23 +56,26 @@ pub async fn handle_connection_commands(
                 println!("UnassignConnectionFromUser, username={}", username);
                 application_scope.remove_session_sender(&username, &messages_sender);
             }
-            ConnectionCommand::SendMessageToAnotherUser { username, content } => {
-                println!(
-                    "SendMessageToAnotherUser, username={}, message={}",
-                    username, content
-                );
-                match application_scope.chat_users.get(&username) {
+            ConnectionCommand::SendMessageToAnotherUser { sender_username, receiver_username, content } => {
+                let private_message_server_metadata: PrivateMessageServerMetadata =
+                    application_scope.add_message_to_private_conversation(sender_username.clone(), receiver_username.clone(), content.clone());
+                match application_scope.chat_users.get(&receiver_username) {
                     Some(user_context) => {
                         let message_obj =
-                            dto::prepare_message_for_from_server_to_client(username, content);
+                            dto::prepare_message_for_from_server_to_client(MessageToSomeone {
+                                id: private_message_server_metadata.id,
+                                content,
+                                sender_username,
+                                datetime: private_message_server_metadata.server_time.to_string(),
+                            });
                         for sender in user_context.opened_sessions_senders.iter() {
                             let _ = sender.send(Message::Text(message_obj.clone()));
                         }
                     }
                     None => {
                         println!(
-                            "cannot send a message {} to user {} because he is not connected",
-                            content, username
+                            "cannot send a message {} to user {} right now because he is not connected",
+                            content, receiver_username
                         );
                     }
                 }

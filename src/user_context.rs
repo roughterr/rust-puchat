@@ -10,9 +10,9 @@ use tungstenite::Message;
 /// Metadata that the server add to a private message after the server receives the message.
 pub struct PrivateMessageServerMetadata {
     /// message id
-    id: u32,
+    pub id: u32,
     /// the datetime when the message was registered on the server.
-    server_time: DateTime<Utc>,
+    pub server_time: DateTime<Utc>,
 }
 
 /// Represents a private chat message in the server internal memory.
@@ -186,7 +186,7 @@ impl ApplicationScope {
                     private_conversation_partners,
                     PrivateConversation::new(new_private_message),
                 );
-                PrivateMessageServerMetadata { id: 0, server_time }
+                PrivateMessageServerMetadata { id: 1, server_time }
             }
             Some(private_messages) => {
                 private_messages.messages.push(new_private_message);

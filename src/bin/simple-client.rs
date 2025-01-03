@@ -78,7 +78,8 @@ async fn main() {
                     }
                     AppState::WaitingForText { receiver_name } => {
                         let new_message = dto::MessageFromSomeone {
-                            salt: util::current_time_millis_as_string(),
+                            after_show: 0,
+                            index: 0,
                             content: message,
                             receiver: receiver_name.to_string(),
                         };

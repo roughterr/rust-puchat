@@ -135,7 +135,8 @@ async fn handle_connection(
                                 .expect("JSON was not well-formatted");
                             let _ = connection_command_sender.send(
                                 ConnectionCommand::SendMessageToAnotherUser {
-                                    username: new_message.receiver,
+                                    sender_username: current_username.clone(),
+                                    receiver_username: new_message.receiver,
                                     content: new_message.content,
                                 },
                             );
