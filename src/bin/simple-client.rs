@@ -86,7 +86,7 @@ async fn main() {
                                     Box::new(NewPrivateMessageSequenceRequest {
                                         receiver_username: message.clone()
                                     }),
-                                    dto::NEW_MESSAGE_SUBJECT.to_string(),
+                                    dto::NEW_PRIVATE_MESSAGE_SEQUENCE_SUBJECT.to_string(),
                                 )))
                                 .await
                                 .unwrap();
@@ -195,6 +195,7 @@ async fn read_ws_messages(
     while let Some(msg) = ws_receiver.next().await {
         match msg {
             Ok(Message::Text(content)) => {
+                println!("Received WS message: {}", &content);
                 let _ =
                     state_change_sender.send(StateChange::NewWebSocketMessage { message: content });
             }

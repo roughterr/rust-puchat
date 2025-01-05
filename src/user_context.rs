@@ -1,3 +1,4 @@
+use crate::dto::NewPrivateMessageSequenceResponse;
 use crate::private_conversation_partners::{
     compare_usernames, PrivateConversationPartnersHashmapKey,
 };
@@ -5,6 +6,7 @@ use crate::user_context::AddSessionResult::{Success, TooManySessions};
 use chrono::{DateTime, Utc};
 use std::collections::HashMap;
 use std::hash::Hash;
+use tungstenite::http::response;
 use tungstenite::Message;
 
 /// Metadata that the server add to a private message after the server receives the message.
@@ -45,13 +47,17 @@ struct PrivateConversation {
     id_offset: u32,
     /// A list of messages.
     messages: Vec<PrivateMessage>,
+    user1_specific_data: PrivateConversationOnePartnerSpecificData,
+    user2_specific_data: PrivateConversationOnePartnerSpecificData,
 }
 
 impl PrivateConversation {
-    pub fn new(first_message: PrivateMessage) -> Self {
+    pub fn new() -> Self {
         PrivateConversation {
             id_offset: 0,
-            messages: vec![first_message],
+            messages: vec![],
+            user1_specific_data: PrivateConversationOnePartnerSpecificData::new(),
+            user2_specific_data: PrivateConversationOnePartnerSpecificData::new(),
         }
     }
 }
@@ -59,7 +65,7 @@ impl PrivateConversation {
 /// Contains data related to the private conversation but these data are relevant only to one of the
 /// two conversation partners.
 struct PrivateConversationOnePartnerSpecificData {
-    /// id of the first message sequence
+    /// id offset of the message sequences
     message_sequence_id_offset: u32,
     /// the fulfillment of the message sequences.
     /// It is done to prevent a situation when the user sends a few consecutive messages but the fist
@@ -69,7 +75,7 @@ struct PrivateConversationOnePartnerSpecificData {
 }
 
 impl PrivateConversationOnePartnerSpecificData {
-    pub fn new(first_message_content: String) -> Self {
+    pub fn new() -> Self {
         PrivateConversationOnePartnerSpecificData {
             message_sequence_id_offset: 0,
             message_sequence_state: Vec::new(),
@@ -79,8 +85,6 @@ impl PrivateConversationOnePartnerSpecificData {
 
 /// The data of one user.
 pub struct ChatUser {
-    /// the key is the user id of the Conversation partner.
-    pub private_conversations: HashMap<String, PrivateConversationOnePartnerSpecificData>,
     // the currently opened sessions of the users.
     pub opened_sessions_senders: Vec<crossbeam_channel::Sender<Message>>,
 }
@@ -88,7 +92,6 @@ pub struct ChatUser {
 impl ChatUser {
     pub fn new() -> Self {
         ChatUser {
-            private_conversations: HashMap::new(),
             opened_sessions_senders: Vec::new(),
         }
     }
@@ -181,10 +184,10 @@ impl ApplicationScope {
             .get_mut(&private_conversation_partners)
         {
             None => {
-                self.private_conversations.insert(
-                    private_conversation_partners,
-                    PrivateConversation::new(new_private_message),
-                );
+                let mut new_private_conversation = PrivateConversation::new();
+                new_private_conversation.messages.push(new_private_message);
+                self.private_conversations
+                    .insert(private_conversation_partners, new_private_conversation);
                 PrivateMessageServerMetadata { id: 1, server_time }
             }
             Some(private_messages) => {
@@ -194,6 +197,64 @@ impl ApplicationScope {
                     server_time,
                 }
             }
+        }
+    }
+
+    pub fn get_new_message_sequence(
+        &mut self,
+        sender: String,
+        receiver: String,
+    ) -> NewPrivateMessageSequenceResponse {
+        let is_sender_partner1: bool = compare_usernames(&sender, &receiver);
+        let (partner1, partner2) = if is_sender_partner1 {
+            (sender, receiver.clone())
+        } else {
+            (receiver.clone(), sender)
+        };
+        let private_conversation_partners =
+            PrivateConversationPartnersHashmapKey { partner1, partner2 };
+        match self
+            .private_conversations
+            .get_mut(&private_conversation_partners)
+        {
+            None => {
+                let mut private_conversation = PrivateConversation::new();
+                let response = Self::get_new_message_sequence_from_conversation(
+                    is_sender_partner1,
+                    &mut private_conversation,
+                    receiver.clone(),
+                );
+                self.private_conversations
+                    .insert(private_conversation_partners, private_conversation);
+                response
+            }
+            Some(private_conversation) => Self::get_new_message_sequence_from_conversation(
+                is_sender_partner1,
+                private_conversation,
+                receiver,
+            ),
+        }
+    }
+
+    /// private function
+    fn get_new_message_sequence_from_conversation(
+        is_sender_partner1: bool,
+        private_conversation: &mut PrivateConversation,
+        receiver: String,
+    ) -> NewPrivateMessageSequenceResponse {
+        let one_partner_data: &mut PrivateConversationOnePartnerSpecificData = if is_sender_partner1
+        {
+            &mut private_conversation.user1_specific_data
+        } else {
+            &mut private_conversation.user2_specific_data
+        };
+        one_partner_data.message_sequence_state.push(0);
+        // the number 1 is 0
+        let sequence_id = one_partner_data.message_sequence_id_offset
+            + one_partner_data.message_sequence_state.len() as u32 - 1;
+        NewPrivateMessageSequenceResponse {
+            sequence_id,
+            receiver_username: receiver,
         }
     }
 }

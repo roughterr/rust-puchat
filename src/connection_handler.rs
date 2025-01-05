@@ -1,5 +1,8 @@
 use crate::dto;
-use crate::dto::{attach_subject_and_serialize, MessageToSomeone, MESSAGE_SUBJECT};
+use crate::dto::{
+    attach_subject_and_serialize, MessageToSomeone, NewPrivateMessageSequenceResponse,
+    MESSAGE_SUBJECT, NEW_PRIVATE_MESSAGE_SEQUENCE_SUBJECT,
+};
 use crate::user_context::{AddSessionResult, ApplicationScope, PrivateMessageServerMetadata};
 use tungstenite::Message;
 
@@ -24,6 +27,7 @@ pub enum ConnectionCommand {
     InitiateNewPrivateMessageSequence {
         sender_username: String,
         receiver_username: String,
+        messages_sender: crossbeam_channel::Sender<Message>,
     },
 }
 
@@ -97,9 +101,16 @@ pub async fn handle_connection_commands(
             ConnectionCommand::InitiateNewPrivateMessageSequence {
                 sender_username,
                 receiver_username,
+                messages_sender,
             } => {
                 print!("InitiateNewPrivateMessageSequence. sender_username={:?} receiver_username={:?}", &sender_username, &receiver_username);
-                //TODO
+                let _ = messages_sender.send(Message::Text(attach_subject_and_serialize(
+                    Box::new(application_scope.get_new_message_sequence(
+                        sender_username.clone(),
+                        receiver_username.clone(),
+                    )),
+                    NEW_PRIVATE_MESSAGE_SEQUENCE_SUBJECT.to_string(),
+                )));
             }
         }
         // print hashmap

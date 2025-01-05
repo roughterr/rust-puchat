@@ -157,6 +157,7 @@ async fn handle_connection(
                                     sender_username: current_username.clone(),
                                     receiver_username: private_message_sequence_request
                                         .receiver_username,
+                                    messages_sender: messages_sender.clone(),
                                 },
                             );
                         }
