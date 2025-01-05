@@ -1,7 +1,7 @@
 use crate::dto;
+use crate::dto::{attach_subject_and_serialize, MessageToSomeone, MESSAGE_SUBJECT};
 use crate::user_context::{AddSessionResult, ApplicationScope, PrivateMessageServerMetadata};
 use tungstenite::Message;
-use crate::dto::{attach_subject_and_serialize, MessageToSomeone, MESSAGE_SUBJECT};
 
 /// Define the maximum allowed number of WebSocket connections per user.
 pub const MAXIMUM_SESSIONS_PER_USER: i32 = 2;
@@ -20,6 +20,10 @@ pub enum ConnectionCommand {
         receiver_username: String,
         ///message content
         content: String,
+    },
+    InitiateNewPrivateMessageSequence {
+        sender_username: String,
+        receiver_username: String,
     },
 }
 
@@ -44,7 +48,9 @@ pub async fn handle_connection_commands(
                 ) {
                     AddSessionResult::Success => {}
                     AddSessionResult::TooManySessions { messages_sender } => {
-                        let _ = messages_sender.send(Message::Text("Exceeded the limit of WebSocket connections".to_string()));
+                        let _ = messages_sender.send(Message::Text(
+                            "Exceeded the limit of WebSocket connections".to_string(),
+                        ));
                         let _ = messages_sender.send(Message::Close(None));
                     }
                 }
@@ -56,9 +62,17 @@ pub async fn handle_connection_commands(
                 println!("UnassignConnectionFromUser, username={}", username);
                 application_scope.remove_session_sender(&username, &messages_sender);
             }
-            ConnectionCommand::SendMessageToAnotherUser { sender_username, receiver_username, content } => {
+            ConnectionCommand::SendMessageToAnotherUser {
+                sender_username,
+                receiver_username,
+                content,
+            } => {
                 let private_message_server_metadata: PrivateMessageServerMetadata =
-                    application_scope.add_message_to_private_conversation(sender_username.clone(), receiver_username.clone(), content.clone());
+                    application_scope.add_message_to_private_conversation(
+                        sender_username.clone(),
+                        receiver_username.clone(),
+                        content.clone(),
+                    );
                 match application_scope.chat_users.get(&receiver_username) {
                     Some(user_context) => {
                         let message_obj =
@@ -79,6 +93,13 @@ pub async fn handle_connection_commands(
                         );
                     }
                 }
+            }
+            ConnectionCommand::InitiateNewPrivateMessageSequence {
+                sender_username,
+                receiver_username,
+            } => {
+                print!("InitiateNewPrivateMessageSequence. sender_username={:?} receiver_username={:?}", &sender_username, &receiver_username);
+                //TODO
             }
         }
         // print hashmap

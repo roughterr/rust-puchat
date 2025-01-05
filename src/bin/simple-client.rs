@@ -1,5 +1,8 @@
-use rust_pr::dto::LoginCredentials;
-use rust_pr::{dto, util};
+use rust_pr::dto::{
+    LoginCredentials, MessageFromSomeone, NewPrivateMessageSequenceRequest,
+    NewPrivateMessageSequenceResponse,
+};
+use rust_pr::dto;
 
 use crossbeam_channel::{unbounded, Sender};
 use futures::stream::SplitStream;
@@ -35,6 +38,14 @@ async fn main() {
     print!("{}", "Please enter your login: ");
     io::stdout().flush().unwrap();
 
+    // we will send this struct
+    let mut message_from_someone: MessageFromSomeone = MessageFromSomeone {
+        message_sequence_id: 0,
+        message_sequence_index: 0,
+        content: "".to_string(),
+        receiver: "".to_string(),
+    };
+
     for state_change in state_change_receiver {
         match state_change {
             StateChange::NewReadlineMessage { message } => {
@@ -47,9 +58,12 @@ async fn main() {
                     AppState::WaitingForPassword { username } => {
                         let login_credentials = LoginCredentials {
                             login: username.to_string(),
-                            password: message
+                            password: message,
                         };
-                        let authorization_message = dto::attach_subject_and_serialize(Box::new(login_credentials), dto::AUTHENTICATE_SUBJECT.to_string());
+                        let authorization_message = dto::attach_subject_and_serialize(
+                            Box::new(login_credentials),
+                            dto::AUTHENTICATE_SUBJECT.to_string(),
+                        );
                         let _ = ws_sender
                             .send(Message::Text(authorization_message))
                             .await
@@ -58,16 +72,27 @@ async fn main() {
                         app_state = AppState::WaitingForServerAuthorizationResponse;
                     }
                     AppState::WaitingForServerAuthorizationResponse => {
-                        println!("Please wait until the server sends us a reponse to our authorization request");
+                        println!("Please wait until the server sends us a response to our authorization request");
+                    }
+                    AppState::WaitingForMessageSequenceId => {
+                        println!("Please wait until the server sends us a message sequence id");
                     }
                     AppState::WaitingForReceiverName => {
                         // message should contain the username of the receiver
                         if is_valid_username(&message) {
-                            print!("{}", "Please type the text that you want to send: ");
-                            std::io::stdout().flush().unwrap();
-                            app_state = AppState::WaitingForText {
-                                receiver_name: message,
-                            };
+                            // send a request for a new message sequence id
+                            let _ = ws_sender
+                                .send(Message::Text(dto::attach_subject_and_serialize(
+                                    Box::new(NewPrivateMessageSequenceRequest {
+                                        receiver_username: message.clone()
+                                    }),
+                                    dto::NEW_MESSAGE_SUBJECT.to_string(),
+                                )))
+                                .await
+                                .unwrap();
+                            println!("A request to receive a new message sequence id has been sent.");
+                            message_from_someone.receiver = message;
+                            app_state = AppState::WaitingForMessageSequenceId;
                         } else {
                             print!(
                                 "{}",
@@ -76,14 +101,19 @@ async fn main() {
                             std::io::stdout().flush().unwrap();
                         }
                     }
-                    AppState::WaitingForText { receiver_name } => {
-                        let new_message = dto::MessageFromSomeone {
-                            after_show: 0,
-                            index: 0,
-                            content: message,
-                            receiver: receiver_name.to_string(),
+                    AppState::WaitingForText => {
+                        message_from_someone.content = message;
+                        let new_message_str = dto::attach_subject_and_serialize(
+                            Box::new(message_from_someone),
+                            dto::NEW_MESSAGE_SUBJECT.to_string(),
+                        );
+                        // put back an empty object
+                        message_from_someone = MessageFromSomeone {
+                            message_sequence_id: 0,
+                            message_sequence_index: 0,
+                            content: "".to_string(),
+                            receiver: "".to_string(),
                         };
-                        let new_message_str = dto::attach_subject_and_serialize(Box::new(new_message), dto::NEW_MESSAGE_SUBJECT.to_string());
                         let _ = ws_sender
                             .send(Message::Text(new_message_str))
                             .await
@@ -108,9 +138,20 @@ async fn main() {
                         } else {
                             println!("We were waiting for \"authentication successful\" but received something else: {}", &message);
                             print!("{}", "Please enter the username again: ");
-                            std::io::stdout().flush().unwrap();
+                            io::stdout().flush().unwrap();
                             app_state = AppState::WaitingForUsername;
                         }
+                    }
+                    AppState::WaitingForMessageSequenceId => {
+                        // parse NewPrivateMessageSequenceResponse
+                        let private_message_sequence_response: NewPrivateMessageSequenceResponse =
+                            serde_json::from_str(&message).expect("JSON was not well-formatted");
+                        message_from_someone.message_sequence_index += 1;
+                        message_from_someone.message_sequence_id =
+                            private_message_sequence_response.sequence_id;
+                        print!("{}", "Please type the text that you want to send: ");
+                        io::stdout().flush().unwrap();
+                        app_state = AppState::WaitingForText;
                     }
                     _ => {
                         println!(
@@ -126,7 +167,10 @@ async fn main() {
 
 fn is_valid_username(username: &str) -> bool {
     // Check if the string is not empty and contains only alphanumeric characters
-    !username.is_empty() && username.chars().all(|c| c.is_alphanumeric() || c == '-' || c == '_' || c == '.')
+    !username.is_empty()
+        && username
+            .chars()
+            .all(|c| c.is_alphanumeric() || c == '-' || c == '_' || c == '.')
 }
 
 enum AppState {
@@ -134,7 +178,8 @@ enum AppState {
     WaitingForPassword { username: String },
     WaitingForServerAuthorizationResponse,
     WaitingForReceiverName,
-    WaitingForText { receiver_name: String },
+    WaitingForMessageSequenceId,
+    WaitingForText,
 }
 
 enum StateChange {

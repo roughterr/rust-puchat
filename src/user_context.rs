@@ -1,8 +1,8 @@
-use crate::user_context::AddSessionResult::{Success, TooManySessions};
-use chrono::{DateTime, Utc};
 use crate::private_conversation_partners::{
     compare_usernames, PrivateConversationPartnersHashmapKey,
 };
+use crate::user_context::AddSessionResult::{Success, TooManySessions};
+use chrono::{DateTime, Utc};
 use std::collections::HashMap;
 use std::hash::Hash;
 use tungstenite::Message;
@@ -59,21 +59,20 @@ impl PrivateConversation {
 /// Contains data related to the private conversation but these data are relevant only to one of the
 /// two conversation partners.
 struct PrivateConversationOnePartnerSpecificData {
-    /// how many times this conversation has been shown to the user
-    show_count: u32,
-    /// HashMap where the key is the number of times when the user retrieved the conversation.
-    /// And the value is the number of messages that were sent as follower messages to this show count.
+    /// id of the first message sequence
+    message_sequence_id_offset: u32,
+    /// the fulfillment of the message sequences.
     /// It is done to prevent a situation when the user sends a few consecutive messages but the fist
     /// message is lost. We do not want the user to see the second or any other consecutive messages
     /// until the previous are delivered.
-    show_count_to_following_messages_count: HashMap<u32, u16>,
+    message_sequence_state: Vec<u16>,
 }
 
 impl PrivateConversationOnePartnerSpecificData {
     pub fn new(first_message_content: String) -> Self {
         PrivateConversationOnePartnerSpecificData {
-            show_count: 0,
-            show_count_to_following_messages_count: HashMap::new(),
+            message_sequence_id_offset: 0,
+            message_sequence_state: Vec::new(),
         }
     }
 }

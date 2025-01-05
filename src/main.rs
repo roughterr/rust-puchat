@@ -1,11 +1,11 @@
+mod connection_handler;
 mod dto;
+mod private_conversation_partners;
+mod user_context;
 mod user_service;
 mod util;
-mod connection_handler;
-mod user_context;
-mod private_conversation_partners;
 
-use dto::{LoginCredentials, MessageFromSomeone, Subject, MessageToSomeone, MESSAGE_SUBJECT};
+use dto::{LoginCredentials, MessageFromSomeone, MessageToSomeone, Subject, MESSAGE_SUBJECT};
 use futures::stream::SplitSink;
 use futures::{SinkExt, StreamExt};
 use log::error;
@@ -15,9 +15,10 @@ use std::net::SocketAddr;
 use tokio::net::{TcpListener, TcpStream};
 use tokio_tungstenite::{accept_async, tungstenite::protocol::Message, WebSocketStream};
 
-use crossbeam_channel::unbounded;
-use serde_json::{Value, json};
 use crate::connection_handler::{handle_connection_commands, ConnectionCommand};
+use crate::dto::NewPrivateMessageSequenceRequest;
+use crossbeam_channel::unbounded;
+use serde_json::{json, Value};
 
 #[tokio::main]
 async fn main() {
@@ -123,7 +124,7 @@ async fn handle_connection(
                         }
                     }
                     dto::NEW_MESSAGE_SUBJECT => {
-                        println!("sending message to another user");
+                        println!("NEW_MESSAGE_SUBJECT request");
                         if current_username.is_empty() {
                             let _ = messages_sender.send(Message::Text(
                                 "you should authorize before sending messages to other users"
@@ -138,6 +139,24 @@ async fn handle_connection(
                                     sender_username: current_username.clone(),
                                     receiver_username: new_message.receiver,
                                     content: new_message.content,
+                                },
+                            );
+                        }
+                    }
+                    dto::NEW_PRIVATE_MESSAGE_SEQUENCE_SUBJECT => {
+                        println!("NEW_PRIVATE_MESSAGE_SEQUENCE_SUBJECT request");
+                        if current_username.is_empty() {
+                            let _ = messages_sender.send(Message::Text(
+                                "you should authorize before making this of request".to_owned(),
+                            ));
+                        } else {
+                            let private_message_sequence_request: NewPrivateMessageSequenceRequest =
+                                serde_json::from_str(&content).expect("JSON was not well-formatted");
+                            let _ = connection_command_sender.send(
+                                ConnectionCommand::InitiateNewPrivateMessageSequence {
+                                    sender_username: current_username.clone(),
+                                    receiver_username: private_message_sequence_request
+                                        .receiver_username,
                                 },
                             );
                         }
@@ -166,4 +185,3 @@ async fn handle_connection(
         println!("end of function handle_connection");
     }
 }
-
