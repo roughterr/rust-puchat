@@ -147,19 +147,26 @@ async fn handle_connection(
                         println!("NEW_PRIVATE_MESSAGE_SEQUENCE_SUBJECT request");
                         if current_username.is_empty() {
                             let _ = messages_sender.send(Message::Text(
-                                "you should authorize before making this of request".to_owned(),
+                                "you should authorize before making this type of request"
+                                    .to_owned(),
                             ));
                         } else {
-                            let private_message_sequence_request: NewPrivateMessageSequenceRequest =
-                                serde_json::from_str(&content).expect("JSON was not well-formatted");
-                            let _ = connection_command_sender.send(
-                                ConnectionCommand::InitiateNewPrivateMessageSequence {
-                                    sender_username: current_username.clone(),
-                                    receiver_username: private_message_sequence_request
-                                        .receiver_username,
-                                    messages_sender: messages_sender.clone(),
-                                },
-                            );
+                            match serde_json::from_str::<NewPrivateMessageSequenceRequest>(&content)
+                            {
+                                Ok(request) => {
+                                    let _ = connection_command_sender.send(
+                                        ConnectionCommand::InitiateNewPrivateMessageSequence {
+                                            sender_username: current_username.clone(),
+                                            receiver_username: request.receiver_username,
+                                            messages_sender: messages_sender.clone(),
+                                        },
+                                    );
+                                }
+                                Err(e) => {
+                                    eprintln!("Failed to parse JSON: {}", e);
+                                    //TODO Handle the error appropriately, e.g., return a message with an error code
+                                }
+                            };
                         }
                     }
                     _ => {
