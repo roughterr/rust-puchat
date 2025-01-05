@@ -139,6 +139,8 @@ async fn handle_connection(
                                     sender_username: current_username.clone(),
                                     receiver_username: new_message.receiver,
                                     content: new_message.content,
+                                    message_sequence_id: new_message.message_sequence_id,
+                                    message_sequence_index: new_message.message_sequence_index,
                                 },
                             );
                         }

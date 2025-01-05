@@ -6,7 +6,6 @@ use crate::user_context::AddSessionResult::{Success, TooManySessions};
 use chrono::{DateTime, Utc};
 use std::collections::HashMap;
 use std::hash::Hash;
-use tungstenite::http::response;
 use tungstenite::Message;
 
 /// Metadata that the server add to a private message after the server receives the message.

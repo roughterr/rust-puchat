@@ -23,6 +23,8 @@ pub enum ConnectionCommand {
         receiver_username: String,
         ///message content
         content: String,
+        message_sequence_id: u32,
+        message_sequence_index: u16,
     },
     InitiateNewPrivateMessageSequence {
         sender_username: String,
@@ -70,6 +72,8 @@ pub async fn handle_connection_commands(
                 sender_username,
                 receiver_username,
                 content,
+                message_sequence_id,
+                message_sequence_index
             } => {
                 let private_message_server_metadata: PrivateMessageServerMetadata =
                     application_scope.add_message_to_private_conversation(
