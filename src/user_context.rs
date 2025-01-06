@@ -256,6 +256,15 @@ impl ApplicationScope {
             receiver_username: receiver,
         }
     }
+
+    pub fn approach_message_sequence(&mut self,
+                                     sender: String,
+                                     receiver: String,
+                                     message_sequence_id: u32,
+                                     message_sequence_index: u16) -> Result<(), String> {
+        //TODO
+        Ok(())
+    }
 }
 
 // partner1 is the reader!
