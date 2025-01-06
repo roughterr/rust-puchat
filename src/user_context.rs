@@ -250,20 +250,43 @@ impl ApplicationScope {
         one_partner_data.message_sequence_state.push(0);
         // the number 1 is 0
         let sequence_id = one_partner_data.message_sequence_id_offset
-            + one_partner_data.message_sequence_state.len() as u32 - 1;
+            + one_partner_data.message_sequence_state.len() as u32
+            - 1;
         NewPrivateMessageSequenceResponse {
             sequence_id,
             receiver_username: receiver,
         }
     }
 
-    pub fn approach_message_sequence(&mut self,
-                                     sender: String,
-                                     receiver: String,
-                                     message_sequence_id: u32,
-                                     message_sequence_index: u16) -> Result<(), String> {
-        //TODO
-        Ok(())
+    pub fn approach_message_sequence(
+        &mut self,
+        sender: String,
+        receiver: String,
+        message_sequence_id: u32,
+        message_sequence_index: u16,
+    ) -> Result<(), String> {
+        let is_sender_partner1: bool = compare_usernames(&sender, &receiver);
+        let (partner1, partner2) = if is_sender_partner1 {
+            (sender, receiver.clone())
+        } else {
+            (receiver.clone(), sender)
+        };
+        let private_conversation_partners =
+            PrivateConversationPartnersHashmapKey { partner1, partner2 };
+        match self
+            .private_conversations
+            .get_mut(&private_conversation_partners)
+        {
+            None => {
+                Err("the conversation does not exist".to_string())
+            }
+            Some(private_conversation) => {
+                let mut private_conversation_one_partner_specific_date
+                    = if is_sender_partner1 { & private_conversation.user1_specific_data } else { & private_conversation.user2_specific_data };
+                //TODO
+                Ok(())
+            },
+        }
     }
 }
 
