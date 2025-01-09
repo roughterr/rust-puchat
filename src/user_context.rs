@@ -70,7 +70,7 @@ struct PrivateConversationOnePartnerSpecificData {
     /// It is done to prevent a situation when the user sends a few consecutive messages but the fist
     /// message is lost. We do not want the user to see the second or any other consecutive messages
     /// until the previous are delivered.
-    message_sequence_state: Vec<u16>,
+    message_sequence_state: Vec<u32>,
 }
 
 impl PrivateConversationOnePartnerSpecificData {
@@ -263,7 +263,7 @@ impl ApplicationScope {
         sender: String,
         receiver: String,
         message_sequence_id: u32,
-        message_sequence_index: u16,
+        message_sequence_index: u32,
     ) -> Result<(), String> {
         let is_sender_partner1: bool = compare_usernames(&sender, &receiver);
         let (partner1, partner2) = if is_sender_partner1 {
@@ -277,15 +277,38 @@ impl ApplicationScope {
             .private_conversations
             .get_mut(&private_conversation_partners)
         {
-            None => {
-                Err("the conversation does not exist".to_string())
-            }
+            None => Err("the conversation does not exist".to_string()),
             Some(private_conversation) => {
-                let mut private_conversation_one_partner_specific_date
-                    = if is_sender_partner1 { & private_conversation.user1_specific_data } else { & private_conversation.user2_specific_data };
-                //TODO
-                Ok(())
-            },
+                let mut private_conversation_one_partner_specific_data = if is_sender_partner1 {
+                    &mut private_conversation.user1_specific_data
+                } else {
+                    &mut private_conversation.user2_specific_data
+                };
+                let index_in_state_arr: usize = (message_sequence_id
+                    - private_conversation_one_partner_specific_data.message_sequence_id_offset)
+                    as usize;
+                if let Some(how_many_messages_already_sent) =
+                    private_conversation_one_partner_specific_data
+                        .message_sequence_state
+                        .get_mut(index_in_state_arr)
+                {
+                    // check if the next index is the index we intend to extend
+                    if *how_many_messages_already_sent + 1 == message_sequence_index {
+                        *how_many_messages_already_sent += 1;
+                        Ok(())
+                    } else {
+                        Err(format!(
+                            "another index for the sequence with id {} expected",
+                            message_sequence_id
+                        ))
+                    }
+                } else {
+                    Err(format!(
+                        "the sequence with id {} does not exist",
+                        message_sequence_id
+                    ))
+                }
+            }
         }
     }
 }
