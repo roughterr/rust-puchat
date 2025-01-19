@@ -18,7 +18,7 @@ pub fn are_credentials_correct(username: &str, password: &str) -> bool {
         username, password
     );
     match USER_TO_PASSWORD.get(username) {
-        Some(&passwordFromDB) => passwordFromDB.eq(password),
+        Some(&password_from_db) => password_from_db.eq(password),
         None => false,
     }
 }

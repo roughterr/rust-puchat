@@ -2,8 +2,6 @@ use erased_serde as erased;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::ops::Deref;
-use crate::user_context::PrivateMessageServerMetadata;
-use crate::util::current_time_millis_as_string;
 
 // this file will contain data transfer objects
 

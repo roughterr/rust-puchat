@@ -1,7 +1,7 @@
 use crate::dto;
 use crate::dto::{
-    attach_subject_and_serialize, MessageToSomeone, NewPrivateMessageSequenceResponse,
-    MESSAGE_SUBJECT, NEW_PRIVATE_MESSAGE_SEQUENCE_SUBJECT,
+    attach_subject_and_serialize, MessageToSomeone
+    , NEW_PRIVATE_MESSAGE_SEQUENCE_SUBJECT,
 };
 use crate::user_context::{AddSessionResult, ApplicationScope, PrivateMessageServerMetadata};
 use tungstenite::Message;
