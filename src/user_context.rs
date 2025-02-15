@@ -83,7 +83,7 @@ impl PrivateConversationOnePartnerSpecificData {
 
 /// The data of one user.
 pub struct ChatUser {
-    // the currently opened sessions of the users.
+    // the currently opened sessions of the user.
     pub opened_sessions_senders: Vec<crossbeam_channel::Sender<Message>>,
 }
 
